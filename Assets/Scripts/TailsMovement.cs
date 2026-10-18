@@ -1,97 +1,176 @@
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody2D))]
 public class TailsMovement : MonoBehaviour
 {
     [Header("Running")]
-    public float maxSpeed = 8f;          // top running speed
-    public float acceleration = 30f;     // how fast he speeds up
-    public float deceleration = 40f;     // how fast he slows down when you let go
+    [SerializeField] private float maxSpeed = 8f;
+    [SerializeField] private float acceleration = 30f;
+    [SerializeField] private float deceleration = 40f;
 
     [Header("Jumping")]
-    public float jumpForce = 12f;        // how strong the jump is
-    public float jumpCutMultiplier = 0.5f; // let go of jump early = shorter jump
+    [SerializeField] private float jumpForce = 12f;
+    [SerializeField, Range(0f, 1f)] private float jumpCutMultiplier = 0.5f;
+    [Tooltip("Can still jump this long after walking off a ledge.")]
+    [SerializeField] private float coyoteTime = 0.1f;
+    [Tooltip("A jump pressed this long before landing still counts.")]
+    [SerializeField] private float jumpBufferTime = 0.1f;
 
     [Header("Ground Check")]
-    public Transform groundCheck;        // empty object placed at Tails' feet
-    public float groundCheckRadius = 0.2f;
-    public LayerMask groundLayer;        // set this to your "Ground" layer
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private float groundCheckRadius = 0.2f;
+    [SerializeField] private LayerMask groundLayer;
 
-    // --- private stuff ---
+    [Header("Animation")]
+    [Tooltip("Seconds in the air before the jump/fall animation plays.")]
+    [SerializeField] private float airAnimDelay = 0.1f;
+
+    // Animator parameter hashes (faster than using strings every frame)
+    private static readonly int SpeedHash = Animator.StringToHash("Speed");
+    private static readonly int IsGroundedHash = Animator.StringToHash("IsGrounded");
+
     private Rigidbody2D rb;
     private Animator anim;
-    private bool isGrounded;
-    private float airTime;
-    private float inputX;
 
-    void Start()
+    private bool isGrounded;
+    private float inputX;
+    private float airTime;
+    private float coyoteCounter;
+    private float jumpBufferCounter;
+    private bool jumpCutRequested;
+
+    // Used by cutscenes to take control away from the player
+    private bool controlEnabled = true;
+    private float forcedInput;
+
+    /// <summary>
+    /// Turn player control on/off. While off, Tails ignores the keyboard and
+    /// moves using forcedInput instead (-1 = left, 0 = stand still, 1 = right).
+    /// </summary>
+    public void SetControl(bool enabled, float forcedInput = 0f)
+    {
+        controlEnabled = enabled;
+        this.forcedInput = forcedInput;
+    }
+
+    private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        anim = GetComponent<Animator>();
+        anim = GetComponent<Animator>(); // optional: script still works without one
+
+        if (groundCheck == null)
+            Debug.LogWarning($"{name}: Ground Check is not assigned!", this);
     }
 
-    void Update()
+    private void Update()
     {
-        // 1. Read the player's input
-        inputX = Input.GetAxisRaw("Horizontal"); // A/D or arrow keys
-
-        // 2. Check if we are touching the ground
-        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
-
-        // 3. Count how long we've been in the air
-        if (isGrounded) airTime = 0;
-        else airTime += Time.deltaTime;
-
-        // 4. Jump (only when on the ground)
-        if (Input.GetButtonDown("Jump") && isGrounded)
-        {
-            Jump();
-        }
-
-        // 5. Letting go of jump early makes the jump shorter
-        if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0)
-        {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier);
-        }
-
-        // 6. Flip Tails to face the direction he's moving
-        Vector3 scale = transform.localScale;
-        if (inputX > 0) scale.x = Mathf.Abs(scale.x);   // face right
-        if (inputX < 0) scale.x = -Mathf.Abs(scale.x);  // face left
-        transform.localScale = scale;
-
-        // 7. Tell the Animator how fast we're moving
-        anim.SetFloat("Speed", Mathf.Abs(rb.linearVelocity.x));
-
-        // 8. Tell the Animator if we're on the ground
-        // Only play the jump animation after 0.1 seconds in the air
-        anim.SetBool("IsGrounded", airTime < 0.1f);
+        ReadInput();
+        UpdateTimers();
+        UpdateFacing();
+        UpdateAnimator();
     }
 
-    void FixedUpdate()
+    private void FixedUpdate()
     {
+        CheckGround();
         Run();
+        HandleJump();
     }
 
-    // ---------- Our actions ----------
+    // ---------- Update helpers ----------
 
-    void Run()
+    private void ReadInput()
+    {
+        if (!controlEnabled)
+        {
+            inputX = forcedInput;
+            jumpBufferCounter = 0f;
+            return;
+        }
+
+        inputX = Input.GetAxisRaw("Horizontal");
+
+        if (Input.GetButtonDown("Jump"))
+            jumpBufferCounter = jumpBufferTime;
+
+        if (Input.GetButtonUp("Jump"))
+            jumpCutRequested = true;
+    }
+
+    private void UpdateTimers()
+    {
+        jumpBufferCounter -= Time.deltaTime;
+
+        if (isGrounded)
+        {
+            coyoteCounter = coyoteTime;
+            airTime = 0f;
+        }
+        else
+        {
+            coyoteCounter -= Time.deltaTime;
+            airTime += Time.deltaTime;
+        }
+    }
+
+    private void UpdateFacing()
+    {
+        if (Mathf.Abs(inputX) < 0.01f) return;
+
+        Vector3 scale = transform.localScale;
+        scale.x = Mathf.Abs(scale.x) * Mathf.Sign(inputX);
+        transform.localScale = scale;
+    }
+
+    private void UpdateAnimator()
+    {
+        if (anim == null) return;
+
+        anim.SetFloat(SpeedHash, Mathf.Abs(rb.linearVelocity.x));
+        anim.SetBool(IsGroundedHash, airTime < airAnimDelay);
+    }
+
+    // ---------- Physics actions ----------
+
+    private void CheckGround()
+    {
+        if (groundCheck == null) return;
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+    }
+
+    private void Run()
     {
         float targetSpeed = inputX * maxSpeed;
-
-        // If pressing a direction, speed up. If not, slow down.
-        float rate = (Mathf.Abs(inputX) > 0.01f) ? acceleration : deceleration;
+        float rate = Mathf.Abs(inputX) > 0.01f ? acceleration : deceleration;
 
         float newSpeed = Mathf.MoveTowards(rb.linearVelocity.x, targetSpeed, rate * Time.fixedDeltaTime);
         rb.linearVelocity = new Vector2(newSpeed, rb.linearVelocity.y);
     }
 
-    void Jump()
+    private void HandleJump()
     {
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        // Jump if the button was pressed recently AND we were on the ground recently
+        if (jumpBufferCounter > 0f && coyoteCounter > 0f)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+
+            jumpBufferCounter = 0f;
+            coyoteCounter = 0f;      // prevents jumping twice off one ground contact
+            jumpCutRequested = false;
+        }
+
+        // Released jump early while still rising = shorter jump
+        if (jumpCutRequested)
+        {
+            if (rb.linearVelocity.y > 0f)
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier);
+
+            jumpCutRequested = false;
+        }
     }
 
-    // Draws the ground check circle in the Scene view so you can see it
-    void OnDrawGizmosSelected()
+    // Shows the ground check circle in the Scene view
+    private void OnDrawGizmosSelected()
     {
         if (groundCheck == null) return;
         Gizmos.color = Color.green;
