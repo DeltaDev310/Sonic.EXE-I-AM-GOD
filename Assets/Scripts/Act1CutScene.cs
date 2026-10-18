@@ -59,6 +59,16 @@ public class Act1Cutscene : MonoBehaviour
     [SerializeField] private GameObject introTitleCard;
     [Tooltip("How long the title card stays up. 0 = no intro.")]
     [SerializeField] private float introTitleTime = 3f;
+    
+    [Header("Intro Title Card Animation")]
+    [Tooltip("The 'HILL ACT 1' text (a child of the title card object). Slides in from the left.")]
+    [SerializeField] private Transform introText;
+    [Tooltip("The pink oval (a child of the title card object). Slides in from the right, behind the text.")]
+    [SerializeField] private Transform introOval;
+    [Tooltip("How far off-screen they start. Sprites: about 15. UI in a Canvas: about 2000.")]
+    [SerializeField] private float introSlideDistance = 15f;
+    [SerializeField] private float introSlideTime = 0.6f;
+    [SerializeField] private float introFadeTime = 0.5f;
 
     [Header("UI (all on one Canvas, drawn above the HUD)")]
     [Tooltip("A full-screen Image. The script swaps its sprite to animate the static.")]
@@ -161,27 +171,66 @@ public class Act1Cutscene : MonoBehaviour
     // ---------- Intro: "HILL ACT 1" ----------
 
     private IEnumerator IntroTitleCard()
+{
+    if (introTitleCard == null || introTitleTime <= 0f)
+        yield break;
+
+    // Black background with the title card on top, game frozen underneath
+    SetAlpha(blackScreen, 1f);
+    introTitleCard.SetActive(true);
+
+    if (tails != null) tails.SetControl(false, 0f);
+    Time.timeScale = 0f;
+    froze = true;
+
+    // Where you placed them in the editor = where they end up
+    Vector3 textEnd = introText != null ? introText.localPosition : Vector3.zero;
+    Vector3 ovalEnd = introOval != null ? introOval.localPosition : Vector3.zero;
+
+    // Text starts on the left, oval starts on the right
+    Vector3 textStart = textEnd + Vector3.left * introSlideDistance;
+    Vector3 ovalStart = ovalEnd + Vector3.right * introSlideDistance;
+
+    if (introText != null) introText.localPosition = textStart;
+    if (introOval != null) introOval.localPosition = ovalStart;
+
+    // ---- 1. Slide in (unscaled time, because the game is frozen) ----
+    float t = 0f;
+    while (t < introSlideTime)
     {
-        if (introTitleCard == null || introTitleTime <= 0f)
-            yield break;
-
-        // Black background with the title card on top, game frozen underneath
-        SetAlpha(blackScreen, 1f);
-        introTitleCard.SetActive(true);
-
-        if (tails != null) tails.SetControl(false, 0f);
-        Time.timeScale = 0f;
-        froze = true;
-
-        yield return new WaitForSecondsRealtime(introTitleTime);
-
-        Time.timeScale = 1f;
-        froze = false;
-
-        introTitleCard.SetActive(false);
-        SetAlpha(blackScreen, 0f);
-        if (tails != null) tails.SetControl(true);
+        t += Time.unscaledDeltaTime;
+        float p = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / introSlideTime));
+        if (introText != null) introText.localPosition = Vector3.Lerp(textStart, textEnd, p);
+        if (introOval != null) introOval.localPosition = Vector3.Lerp(ovalStart, ovalEnd, p);
+        yield return null;
     }
+    if (introText != null) introText.localPosition = textEnd;
+    if (introOval != null) introOval.localPosition = ovalEnd;
+
+    // ---- 2. Hold ----
+    float hold = Mathf.Max(0f, introTitleTime - introSlideTime - introFadeTime);
+    yield return new WaitForSecondsRealtime(hold);
+
+    // ---- 3. Fade out (title card and black screen together) ----
+    t = 0f;
+    while (t < introFadeTime)
+    {
+        t += Time.unscaledDeltaTime;
+        float a = 1f - Mathf.Clamp01(t / introFadeTime);
+        SetAlphaInChildren(introTitleCard, a);
+        SetAlpha(blackScreen, a);
+        yield return null;
+    }
+
+    // ---- 4. Clean up and start the game ----
+    introTitleCard.SetActive(false);
+    SetAlphaInChildren(introTitleCard, 1f);
+    SetAlpha(blackScreen, 0f);
+
+    Time.timeScale = 1f;
+    froze = false;
+    if (tails != null) tails.SetControl(true);
+}
 
     // ---------- The end-of-level cutscene ----------
 
@@ -387,5 +436,18 @@ public class Act1Cutscene : MonoBehaviour
         if (sonicRevealFrames == null || sonicRevealFrames.Length == 0) Debug.LogWarning("[Act1Cutscene] 'Sonic Reveal Frames' is empty - Sonic won't change sprite.", this);
         if (arriveDistance >= cutsceneStartDistance) Debug.LogWarning("[Act1Cutscene] 'Arrive Distance' should be smaller than 'Cutscene Start Distance'.", this);
         if (sonicAppearDistance < cutsceneStartDistance) Debug.LogWarning("[Act1Cutscene] 'Sonic Appear Distance' should be bigger than 'Cutscene Start Distance'.", this);
+    }
+    // Sets the transparency of every Image / Text / sprite inside an object
+    private static void SetAlphaInChildren(GameObject root, float alpha)
+    {
+        foreach (Graphic g in root.GetComponentsInChildren<Graphic>(true))
+            SetAlpha(g, alpha);
+
+        foreach (SpriteRenderer sr in root.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            Color c = sr.color;
+            c.a = alpha;
+            sr.color = c;
+        }
     }
 }
