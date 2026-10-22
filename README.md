@@ -1,10 +1,19 @@
-# Sonic.exe: I AM GOD 
+# Sonic.exe: I AM GOD
 
 An unofficial, fan-made remaster of the classic **Sonic.exe** game, made in Unity with better animation, smoother gameplay, and improved overall quality.
 
-🚧 **This project is still in production.** Things may change, break, or be unfinished.
+> 🚧 **Status: in production.** Things may change, break, or be unfinished.
 
 > This is a non-commercial fan project and is not affiliated with or endorsed by SEGA or the creators of the original game.
+
+---
+
+## What has changed from the original until now?
+
+- Smoother movement and jumping
+- Reworked animations
+- Recreated classic-style HUD
+- Animated title cards and a cutscene-driven ending
 
 ---
 
