@@ -815,7 +815,7 @@ Transform:
   m_GameObject: {fileID: 1195330568}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.302, z: 0}
+  m_LocalPosition: {x: 0, y: 99.4, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1359,6 +1359,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TriggerEXE
   Sonic: {fileID: 1901929546}
+  Tails: {fileID: 1034577422}
+  sonicChaseScript: {fileID: 0}
+  Speed: 8
 --- !u!1 &1901929546
 GameObject:
   m_ObjectHideFlags: 0
@@ -1374,7 +1377,7 @@ GameObject:
   - component: {fileID: 1901929551}
   m_Layer: 0
   m_Name: Sonic exe
-  m_TagString: Untagged
+  m_TagString: Sonic
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1465,7 +1468,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 272252721c56a89a8a3fd177e2c0cf1e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SonicChaseTails
-  Speed: 9.5
+  Speed: 9.8
   Tails: {fileID: 1034577422}
   TailsIsDead: 0
 --- !u!61 &1901929550

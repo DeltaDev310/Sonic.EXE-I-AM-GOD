@@ -10,9 +10,13 @@ public class SonicChaseTails : MonoBehaviour
     public GameObject Tails;
     public bool TailsIsDead = false;
 
+    // New flag to freeze Sonic on impact
+    private bool shouldStopSonic = false;
+
     private void Update()
     {
-        if (!TailsIsDead && Tails != null)
+        // Sonic will ONLY move if Tails isn't dead AND Sonic isn't supposed to stop
+        if (!TailsIsDead && !shouldStopSonic && Tails != null)
         {
             transform.Translate(Vector3.right * Speed * Time.deltaTime);
         }
@@ -20,7 +24,7 @@ public class SonicChaseTails : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D tails)
     {
-        if (tails.CompareTag("Player") && !TailsIsDead)
+        if (tails.gameObject == Tails && !TailsIsDead)
         {
             StartCoroutine(DeathTails());
         }
@@ -29,10 +33,7 @@ public class SonicChaseTails : MonoBehaviour
     private IEnumerator DeathTails()
     {
         TailsIsDead = true;
-
-        Debug.Log("Tails is dead");
-
-        Tails.GetComponent<TailsMovement>().enabled = false;
+        shouldStopSonic = true;
 
         yield return new WaitForSeconds(1f);
     }
